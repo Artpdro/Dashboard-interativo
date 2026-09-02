@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(OPERATOR)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaigns   EmailCampaign[]
+  auditLogs   AuditLog[]
+  smtpConfigs SmtpConfig[]
+
+  @@map("users")
+}
+
+model Company {
+  id              String   @id @default(uuid())
+  name            String
+  email           String?
+  additionalEmails String?  @map("additional_emails")
+  phone           String?  @map("phone")
+  companyName     String?  @map("company_name")
+  document        String?  @unique @map("document")
+  landline        String?
+  street          String?
+  number          String?
+  complement      String?
+  neighborhood    String?
+  city            String?
+  zipCode         String?  @map("zip_code")
+  state           String?
+  overdueAmount   Decimal? @default(0) @map("overdue_amount") @db.Decimal(15, 2)
+  paidAmount      Decimal? @default(0) @map("paid_amount") @db.Decimal(15, 2)
+  dueAmount       Decimal? @default(0) @map("due_amount") @db.Decimal(15, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  groups      CompanyGroup[]
+  emailLogs   EmailLog[]
+  auditLogs   AuditLog[]
+
+  @@index([name])
+  @@index([email])
+  @@index([document])
+  @@index([city])
+  @@index([state])
+  @@index([companyName])
+  @@map("companies")
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  color       String   @default("#3B82F6")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  companies   CompanyGroup[]
+  campaigns   EmailCampaign[]
+
+  @@map("groups")
+}
+
+model CompanyGroup {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+  groupId   String @map("group_id")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, groupId])
+  @@map("company_groups")
+}
+
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  subject   String
+  body      String   @db.Text
+  signature String?  @db.Text
+  variables Json?    @default("[]")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  campaigns EmailCampaign[]
+
+  @@map("email_templates")
+}
+
+model EmailCampaign {
+  id          String        @id @default(uuid())
+  name        String
+  subject     String
+  body        String        @db.Text
+  signature   String?       @db.Text
+  templateId  String?       @map("template_id")
+  groupId     String?       @map("group_id")
+  status      CampaignStatus @default(DRAFT)
+  totalCount  Int           @default(0) @map("total_count")
+  sentCount   Int           @default(0) @map("sent_count")
+  errorCount  Int           @default(0) @map("error_count")
+  pendingCount Int          @default(0) @map("pending_count")
+  sentBy      String        @map("sent_by")
+  smtpConfigId String?      @map("smtp_config_id")
+  startedAt   DateTime?     @map("started_at")
+  completedAt DateTime?     @map("completed_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  template    EmailTemplate? @relation(fields: [templateId], references: [id])
+  group       Group?         @relation(fields: [groupId], references: [id])
+  sender      User           @relation(fields: [sentBy], references: [id])
+  smtpConfig  SmtpConfig?    @relation(fields: [smtpConfigId], references: [id])
+  emailLogs   EmailLog[]
+  attachments CampaignAttachment[]
+
+  @@map("email_campaigns")
+}
+
+model CampaignAttachment {
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  filename    String
+  originalName String  @map("original_name")
+  mimeType    String   @map("mime_type")
+  size        Int
+  path        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_attachments")
+}
+
+model EmailLog {
+  id          String    @id @default(uuid())
+  campaignId  String    @map("campaign_id")
+  companyId   String    @map("company_id")
+  recipient   String
+  subject     String
+  body        String    @db.Text
+  status      EmailStatus @default(PENDING)
+  errorMessage String?  @map("error_message")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([companyId])
+  @@map("email_logs")
+}
+
+model SmtpConfig {
+  id       String  @id @default(uuid())
+  name     String
+  host     String
+  port     Int
+  user     String
+  password String
+  from     String
+  secure   Boolean @default(false)
+  isDefault Boolean @default(false) @map("is_default")
+  isActive Boolean @default(true) @map("is_active")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creator   User          @relation(fields: [createdBy], references: [id])
+  campaigns EmailCampaign[]
+
+  @@map("smtp_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  userId    String?  @map("user_id")
+  companyId String?  @map("company_id")
+  details   Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User?    @relation(fields: [userId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+}
+
+enum CampaignStatus {
+  DRAFT
+  QUEUED
+  SENDING
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
