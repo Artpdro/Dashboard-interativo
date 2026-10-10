@@ -1,27 +1,7 @@
 # CRM Enterprise
 
 Sistema completo de gerenciamento de empresas com comunicação em massa via e-mail.
-
-## Funcionalidades
-
-- **Cadastro de Empresas** com dados completos (endereço, contato, financeiro)
-- **Grupos** para segmentação de empresas
-- **Templates de E-mail** com variáveis dinâmicas e **assinaturas**
-- **Campanhas de E-mail** em massa com **anexos** (PDF, imagens, Word, Excel)
-- **Importação/Exportação CSV** de empresas
-- **Dashboard** com estatísticas e gráficos
-- **Auditoria** completa de ações
-- **Autenticação** com JWT (Admin e Operador)
-- **Configuração SMTP** múltipla
-
 ## Correções Aplicadas
-
-1. ✅ **Adicionar Empresa** - Criada página `CompanyFormPage` com formulário completo
-2. ✅ **Removido gráfico de Estados** do Dashboard
-3. ✅ **Envio de E-mail corrigido** - `createTransport` (era `createTransporter`)
-4. ✅ **Assinaturas** em templates e campanhas
-5. ✅ **Anexos** em campanhas (upload de arquivos)
-6. ✅ **E-mail fixo**: `sindnorteigarassu2019@hotmail.com`
 
 ## Estrutura
 
@@ -72,22 +52,19 @@ npm install
 npm run dev
 ```
 
-Acesse `http://localhost:5173`
-
-**Login padrão:** `admin@crm.com` / `admin123`
-
-## Variáveis de Ambiente (.env)
-
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/crm_enterprise?schema=public"
-JWT_SECRET="sua-chave-secreta-aqui-minimo-32-caracteres"
-JWT_EXPIRES_IN="7d"
-PORT=3001
-NODE_ENV=development
-DEFAULT_FROM_EMAIL="sindnorteigarassu2019@hotmail.com"
-```
-
 ## Tecnologias
 
 - **Backend:** Node.js, Express, TypeScript, Prisma, PostgreSQL, Nodemailer, JWT, Winston
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Radix UI, Recharts, Zustand, Axios
+
+## Uso local no Windows (sem VS Code)
+
+1. Instale o **Node.js LTS** (https://nodejs.org) e o **PostgreSQL**.
+2. Dê dois cliques em **`Instalar CRM.bat`** (só na primeira vez). Ele pede os dados do PostgreSQL, cria o banco, as tabelas, o admin, compila o sistema e cria o atalho **CRM Enterprise** na área de trabalho.
+3. Para usar: abra o atalho **CRM Enterprise**. O servidor sobe e o navegador abre em `http://localhost:3001`. Mantenha a janela aberta enquanto usa; feche-a para encerrar.
+
+Login inicial: `admin@crm.com` / `admin123`.
+
+## Editor de e-mail
+
+Templates, campanhas e envio individual usam um editor com negrito, itálico, sublinhado, riscado, fonte, tamanho, cores, alinhamento, listas, links e variáveis (`{{nome}}` etc.).
