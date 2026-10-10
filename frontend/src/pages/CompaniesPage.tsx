@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { formatDocument, apiError } from '@/lib/format';
+import { notify } from '@/lib/notify';
 import { Search, Plus, Download, Upload, Trash2, Eye, ChevronLeft, ChevronRight, Building2, MapPin, FileText } from 'lucide-react';
 
 export default function CompaniesPage() {
@@ -26,7 +28,7 @@ export default function CompaniesPage() {
       const response = await api.get('/companies', { params: { page, limit: 20, search: search || undefined } });
       setCompanies(response.data.data);
       setTotalPages(response.data.pagination?.totalPages || 1);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    } catch (error) { notify.error('Erro ao carregar empresas', apiError(error)); } finally { setLoading(false); }
   };
 
   const toggleSelect = (id: string) => {
@@ -35,13 +37,13 @@ export default function CompaniesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta empresa?')) return;
-    try { await api.delete(`/companies/${id}`); loadCompanies(); } catch (error) { console.error(error); }
+    try { await api.delete(`/companies/${id}`); notify.success('Empresa excluída'); loadCompanies(); } catch (error) { notify.error('Não foi possível excluir', apiError(error)); }
   };
 
   const handleBatchDelete = async () => {
     if (!confirm(`Tem certeza que deseja excluir ${selectedIds.length} empresas?`)) return;
-    try { await api.post('/companies/batch-delete', { ids: selectedIds }); setSelectedIds([]); loadCompanies(); }
-    catch (error) { console.error(error); }
+    try { await api.post('/companies/batch-delete', { ids: selectedIds }); setSelectedIds([]); notify.success('Empresas excluídas'); loadCompanies(); }
+    catch (error) { notify.error('Não foi possível excluir', apiError(error)); }
   };
 
   const handleExport = async () => {
@@ -54,26 +56,26 @@ export default function CompaniesPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (error) { console.error(error); }
+    } catch (error) { notify.error('Erro ao exportar', apiError(error)); }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Empresas</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Empresas</h1>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExport}><Download className="h-4 w-4 mr-2" />Exportar</Button>
-          <Button variant="outline" onClick={() => navigate('/import')}><Upload className="h-4 w-4 mr-2" />Importar</Button>
+          <Button variant="outline" onClick={() => navigate('/import')}><Upload className="h-4 w-4 mr-2" />Importar planilha</Button>
           <Button onClick={() => navigate('/companies/new')}><Plus className="h-4 w-4 mr-2" />Nova Empresa</Button>
         </div>
       </div>
 
       <Card>
         <CardContent className="p-4">
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Pesquisar por nome, e-mail, CPF/CNPJ..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+              <Input placeholder="Pesquisar por nome, e-mail, CNPJ (com ou sem pontuação), cidade ou bairro..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
             </div>
             {selectedIds.length > 0 && <Button variant="destructive" onClick={handleBatchDelete}><Trash2 className="h-4 w-4 mr-2" />Excluir ({selectedIds.length})</Button>}
           </div>
@@ -123,7 +125,7 @@ export default function CompaniesPage() {
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm">
                             <FileText className="h-3 w-3 text-muted-foreground" />
-                            <span>{company.document || '-'}</span>
+                            <span>{company.document ? formatDocument(company.document) : '-'}</span>
                           </div>
                         </TableCell>
                         <TableCell>

@@ -38,10 +38,10 @@ cd backend
 cp .env.example .env
 # Edite .env com sua DATABASE_URL e JWT_SECRET
 npm install
-npx prisma migrate dev --name init
+npx prisma migrate deploy   # aplica as migrações (não destrutivas)
 npx prisma generate
 npm run db:seed
-npm run dev
+npm run dev                 # ou: npm run build && npm start
 ```
 
 ### Frontend
@@ -64,6 +64,14 @@ npm run dev
 3. Para usar: abra o atalho **CRM Enterprise**. O servidor sobe e o navegador abre em `http://localhost:3001`. Mantenha a janela aberta enquanto usa; feche-a para encerrar.
 
 Login inicial: `admin@crm.com` / `admin123`.
+
+## Novidades
+
+- **Importação** de empresas em `.xls`, `.xlsx` e `.csv` com prévia, mapeamento de colunas, validação, tratamento de duplicados (ignorar ou atualizar) e resumo.
+- **CNPJ** sempre salvo e pesquisado só com dígitos (aceita `12.345.678/0001-90` ou `12345678000190`).
+- **Grupos**: filtros por nome/CNPJ/cidade/bairro, edição de empresas do grupo e sidebar de selecionadas.
+- **SMTP** (menu "Configuração SMTP", administradores): senha criptografada, teste de conexão antes de salvar.
+- Veja `RELATORIO.md` para o detalhamento e os testes.
 
 ## Editor de e-mail
 

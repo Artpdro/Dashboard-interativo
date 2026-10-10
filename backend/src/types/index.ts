@@ -6,6 +6,7 @@ export interface CompanyFilters {
   email?: string;
   phone?: string;
   city?: string;
+  neighborhood?: string;
   state?: string;
   groupId?: string;
   minOverdueAmount?: number;

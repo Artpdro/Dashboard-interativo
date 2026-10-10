@@ -16,6 +16,22 @@ export const errorHandler = (err: Error | AppError, req: Request, res: Response,
     return res.status(err.statusCode).json({ success: false, message: err.message, code: err.code });
   }
   
+  if (err.name === 'MulterError') {
+    const tooLarge = (err as any).code === 'LIMIT_FILE_SIZE';
+    return res.status(tooLarge ? 413 : 400).json({
+      success: false,
+      message: tooLarge ? 'O arquivo excede o tamanho máximo permitido (10 MB).' : 'Erro no envio do arquivo.',
+      code: tooLarge ? 'FILE_TOO_LARGE' : 'UPLOAD_ERROR',
+    });
+  }
+
+  if (err.name === 'PrismaClientKnownRequestError') {
+    const code = (err as any).code;
+    if (code === 'P2002') return res.status(409).json({ success: false, message: 'Já existe um registro com estes dados.', code: 'DUPLICATE' });
+    if (code === 'P2025') return res.status(404).json({ success: false, message: 'Registro não encontrado.', code: 'NOT_FOUND' });
+    if (code === 'P2003') return res.status(409).json({ success: false, message: 'Este registro está vinculado a outros dados.', code: 'IN_USE' });
+  }
+
   if (err.name === 'PrismaClientKnownRequestError' || err.name === 'PrismaClientValidationError') {
     const isDev = process.env.NODE_ENV === 'development';
     return res.status(400).json({ 

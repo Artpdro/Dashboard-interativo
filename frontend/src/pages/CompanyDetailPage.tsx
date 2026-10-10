@@ -9,7 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { EMAIL_VARIABLES } from '@/lib/emailVariables';
-import { ArrowLeft, Building2, Mail, MapPin, DollarSign, Save, Trash2, Send } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, MapPin, DollarSign, Save, Trash2, Send, AlertCircle } from 'lucide-react';
+import { formatDocument, apiError } from '@/lib/format';
+import { notify } from '@/lib/notify';
+
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +24,9 @@ export default function CompanyDetailPage() {
   const [showEmail, setShowEmail] = useState(false);
   const [sending, setSending] = useState(false);
   const [emailData, setEmailData] = useState({ subject: '', body: '' });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => { if (id) loadCompany(); }, [id]);
 
@@ -30,30 +36,39 @@ export default function CompanyDetailPage() {
   };
 
   const handleUpdate = async () => {
-    try { await api.put(`/companies/${id}`, formData); setEditing(false); loadCompany(); alert('Atualizado!'); }
-    catch (e: any) { alert(e.response?.data?.message || 'Erro'); }
+    setSaving(true); setFormError('');
+    try {
+      await api.put(`/companies/${id}`, formData);
+      setEditing(false);
+      await loadCompany(); // recarrega do banco: mostra o que foi realmente gravado (CNPJ normalizado etc.)
+      notify.success('Empresa atualizada');
+    } catch (e) { setFormError(apiError(e, 'Erro ao salvar as alterações')); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     if (!confirm('Excluir empresa?')) return;
-    try { await api.delete(`/companies/${id}`); navigate('/companies'); }
-    catch (e) { console.error(e); }
+    try { await api.delete(`/companies/${id}`); notify.success('Empresa excluída'); navigate('/companies'); }
+    catch (e) { notify.error('Não foi possível excluir', apiError(e)); }
   };
 
   const openEmailDialog = () => {
-    if (!company?.email) { alert('Empresa sem e-mail'); return; }
+    if (!company?.email) { notify.error('Empresa sem e-mail', 'Cadastre um e-mail para esta empresa antes de enviar.'); return; }
     setEmailData({ subject: '', body: '' });
+    setEmailError('');
     setShowEmail(true);
   };
 
   const handleSendEmail = async () => {
-    if (!emailData.subject.trim() || !emailData.body.trim()) { alert('Preencha o assunto e o corpo do e-mail'); return; }
+    if (!emailData.subject.trim() || !emailData.body.trim()) { setEmailError('Preencha o assunto e a mensagem do e-mail.'); return; }
     setSending(true);
+    setEmailError('');
     try {
-      await api.post('/campaigns/send-single', { companyId: id, subject: emailData.subject, body: emailData.body });
+      // O sucesso só é mostrado depois que a API confirma que o servidor SMTP aceitou a mensagem.
+      const res = await api.post('/campaigns/send-single', { companyId: id, subject: emailData.subject, body: emailData.body });
       setShowEmail(false);
-      alert('E-mail enviado!');
-    } catch (e: any) { alert(e.response?.data?.message || 'Erro ao enviar'); }
+      notify.success('E-mail enviado', res.data?.message || `Enviado para ${company?.email}`);
+    } catch (e) { setEmailError(apiError(e, 'Erro ao enviar o e-mail')); }
     finally { setSending(false); }
   };
 
@@ -62,19 +77,20 @@ export default function CompanyDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4 min-w-0">
           <Button variant="outline" size="icon" onClick={() => navigate('/companies')}><ArrowLeft className="h-4 w-4" /></Button>
-          <h1 className="text-3xl font-bold">{company.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary truncate">{company.name}</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={openEmailDialog}><Send className="h-4 w-4 mr-2" />Enviar E-mail</Button>
           <Button variant="outline" onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : 'Editar'}</Button>
-          {editing && <Button onClick={handleUpdate}><Save className="h-4 w-4 mr-2" />Salvar</Button>}
+          {editing && <Button onClick={handleUpdate} disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? 'Salvando...' : 'Salvar'}</Button>}
           <Button variant="destructive" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>
         </div>
       </div>
 
+      {formError && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />{formError}</div>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" />Informações Gerais</CardTitle></CardHeader>
@@ -83,13 +99,13 @@ export default function CompanyDetailPage() {
               <>
                 <div><label className="text-sm font-medium">Nome</label><Input value={formData.name || ''} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
                 <div><label className="text-sm font-medium">Empresa/Fantasia</label><Input value={formData.companyName || ''} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} /></div>
-                <div><label className="text-sm font-medium">Documento</label><Input value={formData.document || ''} onChange={(e) => setFormData({ ...formData, document: e.target.value })} /></div>
+                <div><label className="text-sm font-medium">CPF / CNPJ (com ou sem pontuação)</label><Input value={formData.document || ''} onChange={(e) => setFormData({ ...formData, document: e.target.value })} /></div>
               </>
             ) : (
               <>
                 <p><span className="text-muted-foreground">Nome:</span> {company.name}</p>
                 <p><span className="text-muted-foreground">Empresa:</span> {company.companyName || '-'}</p>
-                <p><span className="text-muted-foreground">Documento:</span> {company.document || '-'}</p>
+                <p><span className="text-muted-foreground">Documento:</span> {company.document ? formatDocument(company.document) : '-'}</p>
               </>
             )}
           </CardContent>
@@ -167,6 +183,7 @@ export default function CompanyDetailPage() {
               <label className="text-sm font-medium">Mensagem</label>
               <RichTextEditor value={emailData.body} onChange={(html) => setEmailData((prev) => ({ ...prev, body: html }))} placeholder="Digite o conteúdo do e-mail..." minHeight={200} variables={EMAIL_VARIABLES} />
             </div>
+            {emailError && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />{emailError}</div>}
             <Button onClick={handleSendEmail} disabled={sending} className="w-full"><Send className="h-4 w-4 mr-2" />{sending ? 'Enviando...' : 'Enviar'}</Button>
           </div>
         </DialogContent>

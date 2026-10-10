@@ -1,1 +1,1 @@
-{"version":3,"file":"companyController.d.ts","sourceRoot":"","sources":["../../src/controllers/companyController.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AA8C5C,eAAO,MAAM,iBAAiB;;;;;;;;;;;CAkJ7B,CAAC"}
+{"version":3,"file":"companyController.d.ts","sourceRoot":"","sources":["../../src/controllers/companyController.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAiC5C,eAAO,MAAM,iBAAiB;;;;;;;IAmH5B,+FAA+F;;IAqB/F,wGAAwG;;IAqBxG,0GAA0G;;;;CA0F3G,CAAC"}

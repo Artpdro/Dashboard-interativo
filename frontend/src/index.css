@@ -3,20 +3,29 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Identidade visual Sindnorte. Toda a paleta fica concentrada nestas variáveis:
+   * para ajustar cores institucionais, basta alterar os valores HSL abaixo.
+   */
   :root {
-    --background: 0 0% 100%; --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%; --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%; --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%; --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%; --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%; --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%; --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%; --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%; --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%; --radius: 0.5rem;
+    --background: 210 33% 97%; --foreground: 215 40% 14%;
+    --card: 0 0% 100%; --card-foreground: 215 40% 14%;
+    --popover: 0 0% 100%; --popover-foreground: 215 40% 14%;
+    --primary: 213 80% 26%; --primary-foreground: 0 0% 100%;      /* azul institucional */
+    --secondary: 214 32% 93%; --secondary-foreground: 213 60% 20%;
+    --muted: 214 32% 94%; --muted-foreground: 215 16% 40%;
+    --accent: 43 96% 52%; --accent-foreground: 213 80% 16%;        /* dourado de destaque */
+    --destructive: 0 72% 46%; --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 30%; --success-foreground: 0 0% 100%;
+    --border: 214 25% 86%; --input: 214 25% 80%;
+    --ring: 213 80% 40%; --radius: 0.5rem;
+    --sidebar: 213 80% 18%; --sidebar-foreground: 210 40% 96%;
   }
   * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-background text-foreground antialiased; font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif; }
+  h1, h2, h3 { letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 }
 
 /* Editor de e-mail (rich text) e visualização do conteúdo formatado */

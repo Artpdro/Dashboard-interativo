@@ -48,8 +48,16 @@ export interface EmailLog {
 
 export interface SmtpConfig {
   id: string; name: string; host: string; port: number;
-  user: string; from: string; secure: boolean;
+  user: string; from: string; fromName: string | null; secure: boolean;
   isDefault: boolean; isActive: boolean;
+  /** A senha nunca é devolvida pela API; só indica se já existe uma salva. */
+  hasPassword: boolean;
+}
+
+/** Empresa em versão enxuta (seleção de grupos). */
+export interface CompanySlim {
+  id: string; name: string; companyName: string | null; document: string | null;
+  email: string | null; city: string | null; neighborhood: string | null; state: string | null;
 }
 
 export interface DashboardStats {

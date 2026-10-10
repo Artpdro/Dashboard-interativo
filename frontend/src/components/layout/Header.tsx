@@ -1,19 +1,23 @@
-import { Bell, Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Menu } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
-export default function Header() {
+export default function Header({ onMenu }: { onMenu: () => void }) {
+  const { user } = useAuth();
   return (
-    <header className="h-16 border-b bg-card flex items-center justify-between px-6">
-      <div className="flex items-center gap-4 flex-1">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Pesquisar..." className="max-w-md border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0" />
+    <header className="h-14 sm:h-16 border-b bg-card flex items-center gap-3 px-4 sm:px-6 sticky top-0 z-30">
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Abrir menu"
+        className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-md text-primary hover:bg-secondary"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-primary truncate">Sindnorte · CRM</p>
+        <p className="hidden sm:block text-xs text-muted-foreground truncate">Gerenciamento de empresas e comunicação</p>
       </div>
-      <div className="flex items-center gap-4">
-        <button className="relative p-2 hover:bg-accent rounded-md transition-colors">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-primary rounded-full" />
-        </button>
-      </div>
+      {user && <span className="hidden sm:block text-sm text-muted-foreground truncate max-w-[14rem]">{user.name}</span>}
     </header>
   );
 }
