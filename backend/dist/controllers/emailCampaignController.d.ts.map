@@ -1,1 +1,1 @@
-{"version":3,"file":"emailCampaignController.d.ts","sourceRoot":"","sources":["../../src/controllers/emailCampaignController.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAwM5C,eAAO,MAAM,uBAAuB;;;;;;;;;;;;;CAkpBnC,CAAC"}
+{"version":3,"file":"emailCampaignController.d.ts","sourceRoot":"","sources":["../../src/controllers/emailCampaignController.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AA0M5C,eAAO,MAAM,uBAAuB;;;;;;;;;;;;;CAqnBnC,CAAC"}

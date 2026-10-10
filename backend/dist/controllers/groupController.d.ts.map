@@ -1,1 +1,1 @@
-{"version":3,"file":"groupController.d.ts","sourceRoot":"","sources":["../../src/controllers/groupController.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAK5C,eAAO,MAAM,eAAe;;;;;;;;;;CAqF3B,CAAC"}
+{"version":3,"file":"groupController.d.ts","sourceRoot":"","sources":["../../src/controllers/groupController.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAiF5C,eAAO,MAAM,eAAe;;;;IAuC1B;;;;;OAKG;;;;;;IAkGH;;;;OAIG;;CAuBJ,CAAC"}

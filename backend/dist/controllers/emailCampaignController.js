@@ -7,12 +7,23 @@ exports.EmailCampaignController = void 0;
 const db_1 = require("../utils/db");
 const errorHandler_1 = require("../utils/errorHandler");
 const audit_1 = require("../utils/audit");
-const nodemailer_1 = __importDefault(require("nodemailer"));
+const logger_1 = require("../utils/logger");
 const library_1 = require("@prisma/client/runtime/library");
+const crypto_1 = __importDefault(require("crypto"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
-const DEFAULT_FROM_EMAIL = 'sindnorteigarassu2019@hotmail.com';
+const emailSender_1 = require("../utils/emailSender");
+const companySearch_1 = require("../utils/companySearch");
 const campaignQueue = new Map();
+// Envios individuais recentes (chave -> horário), para barrar duplo clique / reenvio acidental.
+const SINGLE_SEND_WINDOW_MS = 30000;
+const recentSingleSends = new Map();
+const pruneRecentSingleSends = () => {
+    const limit = Date.now() - SINGLE_SEND_WINDOW_MS;
+    for (const [key, at] of recentSingleSends)
+        if (at < limit)
+            recentSingleSends.delete(key);
+};
 const replaceVariables = (text, company) => {
     if (!text)
         return '';
@@ -51,18 +62,14 @@ const getAttachmentsForMail = (attachments) => {
         path: att.path,
     }));
 };
-const sendEmail = async (transporter, logId, to, subject, html, campaignId, attachments = []) => {
+const sendEmail = async (transporter, from, logId, to, subject, html, campaignId, attachments = []) => {
     try {
-        const mailOptions = {
-            from: `"SINDNORTE" <${DEFAULT_FROM_EMAIL}>`,
-            to,
-            subject,
-            html,
-        };
+        const mailOptions = { from, to, subject, html };
         if (attachments.length > 0) {
             mailOptions.attachments = getAttachmentsForMail(attachments);
         }
-        await transporter.sendMail(mailOptions);
+        // Só conta como enviado quando o servidor SMTP aceita a mensagem.
+        await (0, emailSender_1.deliverMail)(transporter, mailOptions);
         await db_1.prisma.emailLog.update({
             where: { id: logId },
             data: { status: 'SENT', sentAt: new Date() },
@@ -106,19 +113,8 @@ const processCampaign = async (campaignId) => {
         });
         return;
     }
-    const transporter = nodemailer_1.default.createTransport({
-        host: smtpConfig.host,
-        port: smtpConfig.port,
-        secure: smtpConfig.secure,
-        auth: {
-            user: smtpConfig.user,
-            pass: smtpConfig.password,
-        },
-        pool: true,
-        maxConnections: 5,
-        rateDelta: 1000,
-        rateLimit: 5,
-    });
+    const transporter = (0, emailSender_1.buildTransport)(smtpConfig, { pool: true });
+    const from = (0, emailSender_1.buildFrom)(smtpConfig);
     const pendingLogs = await db_1.prisma.emailLog.findMany({
         where: { campaignId, status: 'PENDING' },
         include: { company: true },
@@ -147,12 +143,12 @@ const processCampaign = async (campaignId) => {
         const personalizedBody = replaceVariables(campaign.body, log.company);
         const personalizedSubject = replaceVariables(campaign.subject, log.company);
         const fullBody = buildEmailBody(personalizedBody, campaign.signature);
-        await sendEmail(transporter, log.id, log.recipient, personalizedSubject, fullBody, campaignId, campaign.attachments);
+        await sendEmail(transporter, from, log.id, log.recipient, personalizedSubject, fullBody, campaignId, campaign.attachments);
         await new Promise((resolve) => setTimeout(resolve, 200));
     }
     setTimeout(() => processCampaign(campaignId), 1000);
 };
-// Sanitiza campos de relaÃ§Ã£o: string vazia -> undefined
+// Sanitiza campos de relação: string vazia -> undefined
 const sanitizeId = (val) => {
     if (val === '' || val === null || val === undefined)
         return undefined;
@@ -191,7 +187,7 @@ exports.EmailCampaignController = {
             },
         });
         if (!campaign) {
-            throw new errorHandler_1.AppError('Campanha nÃ£o encontrada', 404, 'NOT_FOUND');
+            throw new errorHandler_1.AppError('Campanha não encontrada', 404, 'NOT_FOUND');
         }
         res.json({ success: true, data: campaign });
     }),
@@ -200,35 +196,19 @@ exports.EmailCampaignController = {
         const cleanTemplateId = sanitizeId(templateId);
         const cleanGroupId = sanitizeId(groupId);
         const cleanSmtpConfigId = sanitizeId(smtpConfigId);
-        // Procura o SMTP informado ou utiliza a configuraÃ§Ã£o padrÃ£o ativa.
-        let smtpConfig = cleanSmtpConfigId
-            ? await db_1.prisma.smtpConfig.findUnique({
-                where: { id: cleanSmtpConfigId },
-            })
-            : null;
-        // Se o SMTP nÃ£o foi informado ou estÃ¡ inativo, procura o padrÃ£o ativo.
-        if (!smtpConfig || !smtpConfig.isActive) {
-            smtpConfig = await db_1.prisma.smtpConfig.findFirst({
-                where: {
-                    isDefault: true,
-                    isActive: true,
-                },
-            });
-            // Se nÃ£o houver um padrÃ£o ativo, utiliza outro SMTP ativo.
-            if (!smtpConfig) {
-                smtpConfig = await db_1.prisma.smtpConfig.findFirst({
-                    where: { isActive: true },
-                    orderBy: { createdAt: 'desc' },
-                });
-            }
+        // SMTP escolhido (se ativo) -> padrão ativo -> qualquer ativo. Na criação pode ficar vazio; no envio é exigido.
+        let smtpConfig = null;
+        try {
+            smtpConfig = await (0, emailSender_1.resolveSmtpConfig)(cleanSmtpConfigId);
+        }
+        catch {
+            smtpConfig = null;
         }
         let recipientCompanies = [];
         if (companyIds && companyIds.length > 0) {
+            const uniqueIds = Array.from(new Set(companyIds));
             recipientCompanies = await db_1.prisma.company.findMany({
-                where: {
-                    id: { in: companyIds },
-                    email: { not: null },
-                },
+                where: { id: { in: uniqueIds }, email: { not: null } },
             });
         }
         else if (cleanGroupId) {
@@ -236,44 +216,39 @@ exports.EmailCampaignController = {
                 where: { groupId: cleanGroupId },
                 include: { company: true },
             });
-            recipientCompanies = groupCompanies
-                .map((gc) => gc.company)
-                .filter((c) => c.email);
+            recipientCompanies = groupCompanies.map((gc) => gc.company).filter((c) => c.email);
         }
         else if (useFilters && filters) {
-            const where = {};
-            if (filters.search) {
-                where.OR = [
-                    {
-                        name: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                    {
-                        email: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                ];
-            }
-            if (filters.city) {
-                where.city = {
-                    contains: filters.city,
-                    mode: 'insensitive',
-                };
-            }
-            if (filters.state) {
-                where.state = {
-                    contains: filters.state,
-                    mode: 'insensitive',
-                };
-            }
-            recipientCompanies = await db_1.prisma.company.findMany({
-                where: { ...where, email: { not: null } },
-            });
+            const ids = await (0, companySearch_1.findAllCompanyIds)({
+                search: filters.search,
+                name: filters.name,
+                document: filters.document,
+                city: filters.city,
+                neighborhood: filters.neighborhood,
+                state: filters.state,
+            }, 20000);
+            recipientCompanies = ids.length
+                ? await db_1.prisma.company.findMany({ where: { id: { in: ids }, email: { not: null } } })
+                : [];
         }
+        // Mantém só e-mails válidos e remove destinatários repetidos (mesmo e-mail em empresas diferentes).
+        const seenEmails = new Set();
+        let skippedInvalid = 0;
+        let skippedDuplicate = 0;
+        recipientCompanies = recipientCompanies.filter((company) => {
+            const email = String(company.email || '').trim();
+            if (!(0, emailSender_1.isValidEmail)(email)) {
+                skippedInvalid++;
+                return false;
+            }
+            const key = email.toLowerCase();
+            if (seenEmails.has(key)) {
+                skippedDuplicate++;
+                return false;
+            }
+            seenEmails.add(key);
+            return true;
+        });
         if (recipientCompanies.length === 0) {
             throw new errorHandler_1.AppError('Nenhuma empresa com e-mail encontrada', 400, 'NO_RECIPIENTS');
         }
@@ -330,7 +305,10 @@ exports.EmailCampaignController = {
         res.status(201).json({
             success: true,
             data: campaign,
-            message: `Campanha criada com ${recipientCompanies.length} destinatÃ¡rios`,
+            message: `Campanha criada com ${recipientCompanies.length} destinatários` +
+                (skippedInvalid || skippedDuplicate
+                    ? ` (${skippedDuplicate} repetidos e ${skippedInvalid} com e-mail inválido foram ignorados)`
+                    : ''),
         });
     }),
     send: (0, errorHandler_1.asyncHandler)(async (req, res) => {
@@ -340,32 +318,13 @@ exports.EmailCampaignController = {
             include: { smtpConfig: true },
         });
         if (!campaign) {
-            throw new errorHandler_1.AppError('Campanha nÃ£o encontrada', 404, 'NOT_FOUND');
+            throw new errorHandler_1.AppError('Campanha não encontrada', 404, 'NOT_FOUND');
         }
         if (campaign.status !== 'DRAFT' && campaign.status !== 'PAUSED') {
-            throw new errorHandler_1.AppError('Campanha jÃ¡ iniciada', 400, 'ALREADY_STARTED');
+            throw new errorHandler_1.AppError('Campanha já iniciada', 400, 'ALREADY_STARTED');
         }
-        // Tenta usar o SMTP jÃ¡ associado Ã  campanha.
-        let smtpConfig = campaign.smtpConfig;
-        // Se nÃ£o houver SMTP vÃ¡lido, procura a configuraÃ§Ã£o padrÃ£o ativa.
-        if (!smtpConfig || !smtpConfig.isActive) {
-            smtpConfig = await db_1.prisma.smtpConfig.findFirst({
-                where: {
-                    isDefault: true,
-                    isActive: true,
-                },
-            });
-        }
-        // Se nÃ£o houver padrÃ£o, procura qualquer SMTP ativo.
-        if (!smtpConfig) {
-            smtpConfig = await db_1.prisma.smtpConfig.findFirst({
-                where: { isActive: true },
-                orderBy: { createdAt: 'desc' },
-            });
-        }
-        if (!smtpConfig) {
-            throw new errorHandler_1.AppError('Nenhuma configuraÃ§Ã£o SMTP ativa foi encontrada.', 400, 'NO_SMTP');
-        }
+        // SMTP da campanha (se ativo) -> padrão ativo -> qualquer ativo; erro claro quando não há nenhum.
+        const smtpConfig = await (0, emailSender_1.resolveSmtpConfig)(campaign.smtpConfigId);
         // Associa o SMTP e inicia a campanha.
         await db_1.prisma.emailCampaign.update({
             where: { id },
@@ -457,7 +416,7 @@ exports.EmailCampaignController = {
         });
         res.json({
             success: true,
-            message: 'Campanha excluÃ­da',
+            message: 'Campanha excluída',
         });
     }),
     preview: (0, errorHandler_1.asyncHandler)(async (req, res) => {
@@ -483,7 +442,7 @@ exports.EmailCampaignController = {
                 name: 'Empresa Exemplo',
                 companyName: 'Empresa Exemplo LTDA',
                 email: 'exemplo@email.com',
-                city: 'SÃ£o Paulo',
+                city: 'São Paulo',
                 state: 'SP',
                 overdueAmount: new library_1.Decimal(1500.00),
                 paidAmount: new library_1.Decimal(5000.00),
@@ -508,98 +467,126 @@ exports.EmailCampaignController = {
         });
     }),
     sendSingle: (0, errorHandler_1.asyncHandler)(async (req, res) => {
-        const { companyId, subject, body, signature, templateId, smtpConfigId, } = req.body;
-        const company = await db_1.prisma.company.findUnique({
-            where: { id: companyId },
-        });
-        if (!company || !company.email) {
-            throw new errorHandler_1.AppError('Empresa nÃ£o encontrada ou sem e-mail', 400, 'NO_EMAIL');
+        const { companyId, subject, body, signature, templateId, smtpConfigId } = req.body;
+        if (!companyId) {
+            throw new errorHandler_1.AppError('Selecione a empresa destinatária.', 400, 'VALIDATION_ERROR');
         }
-        const smtpConfig = smtpConfigId
-            ? await db_1.prisma.smtpConfig.findUnique({
-                where: { id: smtpConfigId },
-            })
-            : await db_1.prisma.smtpConfig.findFirst({
-                where: {
-                    isDefault: true,
-                    isActive: true,
-                },
-            });
-        if (!smtpConfig) {
-            throw new errorHandler_1.AppError('ConfiguraÃ§Ã£o SMTP nÃ£o encontrada', 400, 'NO_SMTP');
+        const company = await db_1.prisma.company.findUnique({ where: { id: String(companyId) } });
+        if (!company) {
+            throw new errorHandler_1.AppError('Empresa não encontrada.', 404, 'NOT_FOUND');
         }
-        let emailSubject = subject;
-        let emailBody = body;
-        let emailSignature = signature;
+        const recipient = (company.email || '').trim();
+        if (!recipient) {
+            throw new errorHandler_1.AppError('Esta empresa não tem e-mail cadastrado.', 400, 'NO_EMAIL');
+        }
+        if (!(0, emailSender_1.isValidEmail)(recipient)) {
+            throw new errorHandler_1.AppError(`O e-mail cadastrado (${recipient}) é inválido. Corrija o cadastro da empresa.`, 400, 'INVALID_EMAIL');
+        }
+        let emailSubject = typeof subject === 'string' ? subject : '';
+        let emailBody = typeof body === 'string' ? body : '';
+        let emailSignature = typeof signature === 'string' ? signature : null;
         if (templateId) {
-            const template = await db_1.prisma.emailTemplate.findUnique({
-                where: { id: templateId },
-            });
+            const template = await db_1.prisma.emailTemplate.findUnique({ where: { id: String(templateId) } });
             if (template) {
                 emailSubject = template.subject;
                 emailBody = template.body;
                 emailSignature = template.signature || '';
             }
         }
-        const transporter = nodemailer_1.default.createTransport({
-            host: smtpConfig.host,
-            port: smtpConfig.port,
-            secure: smtpConfig.secure,
-            auth: {
-                user: smtpConfig.user,
-                pass: smtpConfig.password,
-            },
-        });
+        if (!emailSubject.trim() || !emailBody.trim()) {
+            throw new errorHandler_1.AppError('Preencha o assunto e a mensagem do e-mail.', 400, 'VALIDATION_ERROR');
+        }
+        // Mesma configuração SMTP salva usada pelas campanhas (escolhida -> padrão -> qualquer ativa).
+        const smtpConfig = await (0, emailSender_1.resolveSmtpConfig)(sanitizeId(smtpConfigId));
+        // Evita envio repetido por clique duplo/reenvio acidental.
+        const sendKey = crypto_1.default
+            .createHash('sha1')
+            .update(`${req.user.id}|${company.id}|${emailSubject}|${emailBody}`)
+            .digest('hex');
+        pruneRecentSingleSends();
+        if (recentSingleSends.has(sendKey)) {
+            throw new errorHandler_1.AppError('Este e-mail já foi enviado para esta empresa há instantes. Aguarde antes de enviar novamente.', 409, 'DUPLICATE_SEND');
+        }
+        recentSingleSends.set(sendKey, Date.now());
         const personalizedSubject = replaceVariables(emailSubject, company);
         const personalizedBody = replaceVariables(emailBody, company);
         const fullBody = buildEmailBody(personalizedBody, emailSignature);
-        await transporter.sendMail({
-            from: `"SINDNORTE" <${DEFAULT_FROM_EMAIL}>`,
-            to: company.email,
-            subject: personalizedSubject,
-            html: fullBody,
-        });
+        // Registra a tentativa ANTES de enviar: sucesso ou falha ficam no histórico.
         const campaign = await db_1.prisma.emailCampaign.create({
             data: {
                 name: `E-mail individual - ${company.name}`,
                 subject: personalizedSubject,
                 body: personalizedBody,
                 signature: emailSignature,
-                status: 'COMPLETED',
+                status: 'SENDING',
                 totalCount: 1,
-                sentCount: 1,
-                pendingCount: 0,
+                pendingCount: 1,
                 sentBy: req.user.id,
                 smtpConfigId: smtpConfig.id,
-                completedAt: new Date(),
+                startedAt: new Date(),
             },
         });
-        await db_1.prisma.emailLog.create({
+        const emailLog = await db_1.prisma.emailLog.create({
             data: {
                 campaignId: campaign.id,
                 companyId: company.id,
-                recipient: company.email,
+                recipient,
                 subject: personalizedSubject,
                 body: personalizedBody,
-                status: 'SENT',
-                sentAt: new Date(),
+                status: 'PENDING',
             },
         });
-        await (0, audit_1.logAudit)({
-            action: 'SEND_SINGLE_EMAIL',
-            entity: 'EMAIL',
-            entityId: company.id,
-            userId: req.user.id,
-            details: {
-                to: company.email,
+        const transporter = (0, emailSender_1.buildTransport)(smtpConfig);
+        try {
+            const delivery = await (0, emailSender_1.deliverMail)(transporter, {
+                from: (0, emailSender_1.buildFrom)(smtpConfig),
+                to: recipient,
                 subject: personalizedSubject,
-            },
-            req,
-        });
-        res.json({
-            success: true,
-            message: 'E-mail enviado com sucesso',
-        });
+                html: fullBody,
+            });
+            await db_1.prisma.emailLog.update({ where: { id: emailLog.id }, data: { status: 'SENT', sentAt: new Date() } });
+            await db_1.prisma.emailCampaign.update({
+                where: { id: campaign.id },
+                data: { status: 'COMPLETED', sentCount: 1, pendingCount: 0, completedAt: new Date() },
+            });
+            await (0, audit_1.logAudit)({
+                action: 'SEND_SINGLE_EMAIL',
+                entity: 'EMAIL',
+                entityId: company.id,
+                userId: req.user.id,
+                companyId: company.id,
+                details: { to: recipient, subject: personalizedSubject, messageId: delivery.messageId },
+                req,
+            });
+            logger_1.logger.info(`E-mail individual enviado para ${recipient} (campanha ${campaign.id})`);
+            res.json({
+                success: true,
+                message: `E-mail enviado com sucesso para ${recipient}`,
+                data: { recipient, messageId: delivery.messageId, campaignId: campaign.id },
+            });
+        }
+        catch (error) {
+            recentSingleSends.delete(sendKey); // permite tentar de novo depois de corrigir o problema
+            await db_1.prisma.emailLog.update({ where: { id: emailLog.id }, data: { status: 'FAILED', errorMessage: error.message } });
+            await db_1.prisma.emailCampaign.update({
+                where: { id: campaign.id },
+                data: { status: 'COMPLETED', errorCount: 1, pendingCount: 0, completedAt: new Date() },
+            });
+            await (0, audit_1.logAudit)({
+                action: 'SEND_SINGLE_EMAIL_FAILED',
+                entity: 'EMAIL',
+                entityId: company.id,
+                userId: req.user.id,
+                companyId: company.id,
+                details: { to: recipient, subject: personalizedSubject, error: error.message },
+                req,
+            });
+            logger_1.logger.warn(`Falha no envio individual para ${recipient}: ${error.message}`);
+            throw new errorHandler_1.AppError(`Não foi possível enviar o e-mail: ${error.message}`, 502, 'SEND_FAILED');
+        }
+        finally {
+            transporter.close();
+        }
     }),
     getHistory: (0, errorHandler_1.asyncHandler)(async (req, res) => {
         const { page = 1, limit = 20 } = req.query;
@@ -660,7 +647,7 @@ exports.EmailCampaignController = {
             where: { id: attachmentId },
         });
         if (!attachment) {
-            throw new errorHandler_1.AppError('Anexo nÃ£o encontrado', 404, 'NOT_FOUND');
+            throw new errorHandler_1.AppError('Anexo não encontrado', 404, 'NOT_FOUND');
         }
         try {
             fs_1.default.unlinkSync(attachment.path);

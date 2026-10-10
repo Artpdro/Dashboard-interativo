@@ -4,11 +4,15 @@ import api from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowLeft, Building2, AlertCircle } from 'lucide-react';
+import { apiError } from '@/lib/format';
+import { notify } from '@/lib/notify';
+
 
 export default function CompanyFormPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState<Record<string, string>>({
     name: '', email: '', additionalEmails: '', phone: '', companyName: '', document: '',
     landline: '', street: '', number: '', complement: '', neighborhood: '', city: '',
@@ -22,6 +26,7 @@ export default function CompanyFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
       const payload = {
         ...formData,
@@ -30,10 +35,12 @@ export default function CompanyFormPage() {
         dueAmount: formData.dueAmount ? parseFloat(formData.dueAmount.replace(/[R$\s.]/g, '').replace(',', '.')) : 0,
       };
       await api.post('/companies', payload);
-      alert('Empresa criada com sucesso!');
+      notify.success('Empresa cadastrada', 'Os dados foram salvos.');
       navigate('/companies');
     } catch (e: any) {
-      alert(e.response?.data?.message || 'Erro ao criar empresa');
+      const msg = apiError(e, 'Erro ao criar empresa');
+      setError(msg);
+      notify.error('Não foi possível salvar', msg);
     } finally {
       setLoading(false);
     }
@@ -45,7 +52,7 @@ export default function CompanyFormPage() {
     { key: 'additionalEmails', label: 'E-mails Adicionais', type: 'text' },
     { key: 'phone', label: 'Celular', type: 'text' },
     { key: 'companyName', label: 'Empresa / Nome Fantasia', type: 'text' },
-    { key: 'document', label: 'CPF / CNPJ', type: 'text' },
+    { key: 'document', label: 'CPF / CNPJ (com ou sem pontuação)', type: 'text' },
     { key: 'landline', label: 'Fone Fixo', type: 'text' },
     { key: 'street', label: 'Rua', type: 'text' },
     { key: 'number', label: 'Número', type: 'text' },
@@ -54,16 +61,16 @@ export default function CompanyFormPage() {
     { key: 'city', label: 'Cidade', type: 'text' },
     { key: 'zipCode', label: 'CEP', type: 'text' },
     { key: 'state', label: 'Estado', type: 'text' },
-    { key: 'overdueAmount', label: 'Valor Vencido', type: 'number' },
-    { key: 'paidAmount', label: 'Valor Pago', type: 'number' },
-    { key: 'dueAmount', label: 'Valor a Vencer', type: 'number' },
+    { key: 'overdueAmount', label: 'Valor Vencido', type: 'text' },
+    { key: 'paidAmount', label: 'Valor Pago', type: 'text' },
+    { key: 'dueAmount', label: 'Valor a Vencer', type: 'text' },
   ];
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" onClick={() => navigate('/companies')}><ArrowLeft className="h-4 w-4" /></Button>
-        <h1 className="text-3xl font-bold">Nova Empresa</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nova Empresa</h1>
       </div>
       <Card>
         <CardHeader>
@@ -71,6 +78,7 @@ export default function CompanyFormPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />{error}</div>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {fields.map((f) => (
                 <div key={f.key} className="space-y-1">
@@ -79,7 +87,7 @@ export default function CompanyFormPage() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
               <Button variant="outline" type="button" onClick={() => navigate('/companies')}>Cancelar</Button>
               <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar Empresa'}</Button>
             </div>
