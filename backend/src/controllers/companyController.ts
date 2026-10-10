@@ -63,15 +63,85 @@ export const CompanyController = {
     res.json({ success: true, data: company });
   }),
 
+  
   create: asyncHandler(async (req: any, res: Response) => {
     const data = req.body;
-    if (data.document) {
-      const existing = await prisma.company.findUnique({ where: { document: data.document } });
-      if (existing) throw new AppError('CPF/CNPJ já cadastrado', 400, 'DUPLICATE_DOCUMENT');
+
+    // Converte documento vazio em null.
+    // O banco aceita vários registros com documento null.
+    const document =
+      typeof data.document === 'string'
+        ? data.document.trim() || null
+        : data.document ?? null;
+
+    // Verifica se o documento já pertence a outra empresa.
+    if (document) {
+      const existing = await prisma.company.findUnique({
+        where: { document },
+      });
+
+      if (existing) {
+        throw new AppError(
+          'Este CPF/CNPJ já está cadastrado. Consulte a empresa existente.',
+          400,
+          'DUPLICATE_DOCUMENT'
+        );
+      }
     }
-    const company = await prisma.company.create({ data: { ...data, overdueAmount: data.overdueAmount ? new Decimal(data.overdueAmount) : new Decimal(0), paidAmount: data.paidAmount ? new Decimal(data.paidAmount) : new Decimal(0), dueAmount: data.dueAmount ? new Decimal(data.dueAmount) : new Decimal(0) }, include: { groups: { include: { group: true } } } });
-    await logAudit({ action: 'CREATE', entity: 'COMPANY', entityId: company.id, userId: req.user.id, details: data, req });
-    res.status(201).json({ success: true, data: company, message: 'Empresa criada com sucesso' });
+
+    let company;
+
+    try {
+      company = await prisma.company.create({
+        data: {
+          ...data,
+          document,
+          overdueAmount: data.overdueAmount
+            ? new Decimal(data.overdueAmount)
+            : new Decimal(0),
+          paidAmount: data.paidAmount
+            ? new Decimal(data.paidAmount)
+            : new Decimal(0),
+          dueAmount: data.dueAmount
+            ? new Decimal(data.dueAmount)
+            : new Decimal(0),
+        },
+        include: {
+          groups: {
+            include: { group: true },
+          },
+        },
+      });
+    } catch (error: any) {
+      // Trata também possíveis conflitos de unicidade.
+      if (
+        error?.code === 'P2002' &&
+        error?.meta?.target?.includes?.('document')
+      ) {
+        throw new AppError(
+          'Este CPF/CNPJ já está cadastrado no sistema.',
+          400,
+          'DUPLICATE_DOCUMENT'
+        );
+      }
+
+      throw error;
+    }
+
+    await logAudit({
+      action: 'CREATE',
+      entity: 'COMPANY',
+      entityId: company.id,
+      userId: req.user.id,
+      details: { ...data, document },
+      req,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: company,
+      message: 'Empresa criada com sucesso',
+    });
   }),
 
   update: asyncHandler(async (req: any, res: Response) => {
@@ -159,7 +229,7 @@ export const CompanyController = {
     else if (groupId) where.groups = { some: { groupId } };
     const companies = await prisma.company.findMany({ where, include: { groups: { include: { group: true } } }, orderBy: { name: 'asc' } });
     const csvData = companies.map((c) => ({ Nome: c.name, Email: c.email || '', 'Emails adicionais': c.additionalEmails || '', Celular: c.phone || '', Empresa: c.companyName || '', 'CPF ou CNPJ': c.document || '', Fone: c.landline || '', Rua: c.street || '', Número: c.number || '', Complemento: c.complement || '', Bairro: c.neighborhood || '', Cidade: c.city || '', CEP: c.zipCode || '', Estado: c.state || '', 'Valor Vencido': c.overdueAmount?.toString() || '0', 'Valor Pago': c.paidAmount?.toString() || '0', 'Valor a Vencer': c.dueAmount?.toString() || '0', Grupos: c.groups.map((g) => g.group.name).join('; '), 'Data de Cadastro': c.createdAt.toISOString() }));
-    const csv = Papa.unparse(csvData, { delimiter: ';', newline: '\r\n', encoding: 'utf-8' });
+    const csv = Papa.unparse(csvData, { delimiter: ';', newline: '\r\n' });
     const bom = '\uFEFF';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="empresas_${new Date().toISOString().split('T')[0]}.csv"`);

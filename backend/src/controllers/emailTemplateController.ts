@@ -43,7 +43,13 @@ export const EmailTemplateController = {
     const original = await prisma.emailTemplate.findUnique({ where: { id } });
     if (!original) throw new AppError('Template não encontrado', 404, 'NOT_FOUND');
     const template = await prisma.emailTemplate.create({
-      data: { name: `${original.name} (Cópia)`, subject: original.subject, body: original.body, signature: original.signature, variables: original.variables },
+      data: {
+        name: `${original.name} (Cópia)`,
+        subject: original.subject,
+        body: original.body,
+        signature: original.signature,
+        variables: original.variables ?? [],
+      },
     });
     await logAudit({ action: 'DUPLICATE', entity: 'EMAIL_TEMPLATE', entityId: template.id, userId: req.user.id, details: { originalId: id }, req });
     res.status(201).json({ success: true, data: template, message: 'Template duplicado com sucesso' });

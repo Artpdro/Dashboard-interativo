@@ -12,7 +12,7 @@ export const AuthController = {
     if (!user || !user.isActive) throw new AppError('Credenciais inválidas', 401, 'INVALID_CREDENTIALS');
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) throw new AppError('Credenciais inválidas', 401, 'INVALID_CREDENTIALS');
-    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET!, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET!, { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any });
     await logAudit({ action: 'LOGIN', entity: 'USER', entityId: user.id, userId: user.id, req });
     res.json({ success: true, data: { token, user: { id: user.id, name: user.name, email: user.email, role: user.role } } });
   }),

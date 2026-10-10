@@ -12,18 +12,25 @@ import emailTemplateRoutes from './routes/emailTemplateRoutes';
 import emailCampaignRoutes from './routes/emailCampaignRoutes';
 import smtpConfigRoutes from './routes/smtpConfigRoutes';
 import auditLogRoutes from './routes/auditLogRoutes';
+import { mountFrontend } from './utils/staticFrontend';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
+const isProd = process.env.NODE_ENV === 'production';
+// Em produção (uso local) escuta só neste computador; defina HOST=0.0.0.0 no .env para liberar a rede
+const HOST = process.env.HOST || (isProd ? '127.0.0.1' : undefined);
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: { useDefaults: true, directives: { 'upgrade-insecure-requests': null } },
+  hsts: false,
+}));
 app.use(cors({ origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173', 'http://localhost:3000'], credentials: true }));
 
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || (isProd ? 3000 : 100),
   message: { success: false, message: 'Muitas requisições, tente novamente mais tarde' },
 });
 app.use(limiter);
@@ -43,12 +50,15 @@ app.use('/api/campaigns', emailCampaignRoutes);
 app.use('/api/smtp', smtpConfigRoutes);
 app.use('/api/audit', auditLogRoutes);
 
+mountFrontend(app);
+
 app.use(errorHandler);
 app.use((req, res) => { res.status(404).json({ success: false, message: 'Rota não encontrada' }); });
 
-app.listen(PORT, () => {
+const onListen = () => {
   logger.info(`🚀 Servidor rodando na porta ${PORT}`);
   logger.info(`📚 API disponível em http://localhost:${PORT}/api`);
-});
+};
+if (HOST) app.listen(PORT, HOST, onListen); else app.listen(PORT, onListen);
 
 export default app;
