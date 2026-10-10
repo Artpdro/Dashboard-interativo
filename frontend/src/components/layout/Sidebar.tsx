@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { LayoutDashboard, Building2, Users, Mail, FileText, Shield, History, Upload, LogOut, Tag } from 'lucide-react';
+import { LayoutDashboard, Building2, Mail, FileText, Shield, History, Upload, LogOut, Tag } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();

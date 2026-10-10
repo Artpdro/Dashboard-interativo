@@ -3,12 +3,12 @@ import api from '@/services/api';
 import { EmailTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { EMAIL_VARIABLES } from '@/lib/emailVariables';
+import { renderEmailHtml } from '@/lib/emailHtml';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, FileText, Trash2, Edit, Copy, Eye, PenLine } from 'lucide-react';
-
-const VARIABLES = ['{{nome}}', '{{empresa}}', '{{email}}', '{{cidade}}', '{{estado}}', '{{valor_vencido}}', '{{valor_pago}}', '{{valor_a_vencer}}', '{{rua}}', '{{numero}}', '{{bairro}}', '{{cep}}', '{{telefone}}', '{{documento}}'];
+import { Plus, FileText, Trash2, Edit, Copy, PenLine } from 'lucide-react';
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -30,7 +30,7 @@ export default function TemplatesPage() {
       if (editingTemplate) {
         await api.put(`/templates/${editingTemplate.id}`, formData);
       } else {
-        await api.post('/templates', { ...formData, variables: VARIABLES });
+        await api.post('/templates', { ...formData, variables: EMAIL_VARIABLES });
       }
       setShowDialog(false); setEditingTemplate(null); setFormData({ name: '', subject: '', body: '', signature: '' }); loadTemplates();
     } catch (e: any) { alert(e.response?.data?.message || 'Erro'); }
@@ -49,10 +49,6 @@ export default function TemplatesPage() {
     setEditingTemplate(template);
     setFormData({ name: template.name, subject: template.subject, body: template.body, signature: template.signature || '' });
     setShowDialog(true);
-  };
-
-  const insertVariable = (variable: string) => {
-    setFormData({ ...formData, body: formData.body + ' ' + variable });
   };
 
   if (loading) return <div>Carregando...</div>;
@@ -95,27 +91,19 @@ export default function TemplatesPage() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingTemplate ? 'Editar Template' : 'Novo Template'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><label className="text-sm font-medium">Nome</label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
             <div><label className="text-sm font-medium">Assunto</label><Input value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} /></div>
             <div>
               <label className="text-sm font-medium">Corpo do E-mail</label>
-              <Textarea value={formData.body} onChange={(e) => setFormData({ ...formData, body: e.target.value })} placeholder="Digite o conteúdo do e-mail..." rows={6} />
+              <RichTextEditor value={formData.body} onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))} placeholder="Digite o conteúdo do e-mail..." minHeight={200} variables={EMAIL_VARIABLES} />
             </div>
             <div>
               <label className="text-sm font-medium flex items-center gap-2"><PenLine className="h-4 w-4" />Assinatura</label>
-              <Textarea value={formData.signature} onChange={(e) => setFormData({ ...formData, signature: e.target.value })} placeholder="Digite a assinatura que aparecerá no final de todos os e-mails enviados com este template..." rows={4} />
+              <RichTextEditor value={formData.signature} onChange={(html) => setFormData((prev) => ({ ...prev, signature: html }))} placeholder="Digite a assinatura que aparecerá no final de todos os e-mails enviados com este template..." minHeight={90} />
               <p className="text-xs text-muted-foreground mt-1">A assinatura será automaticamente adicionada ao final de cada e-mail.</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Variáveis disponíveis:</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {VARIABLES.map(v => (
-                  <button key={v} onClick={() => insertVariable(v)} className="text-xs bg-secondary px-2 py-1 rounded hover:bg-secondary/80 transition-colors">{v}</button>
-                ))}
-              </div>
             </div>
             <Button onClick={handleSave} className="w-full">{editingTemplate ? 'Salvar' : 'Criar'}</Button>
           </div>
@@ -129,12 +117,12 @@ export default function TemplatesPage() {
             <div className="bg-muted p-3 rounded"><p className="text-sm font-medium">Assunto:</p><p>{previewTemplate?.subject}</p></div>
             <div className="bg-muted p-3 rounded min-h-[200px]">
               <p className="text-sm font-medium mb-2">Corpo:</p>
-              <div className="whitespace-pre-wrap text-sm" dangerouslySetInnerHTML={{ __html: previewTemplate?.body.replace(/\n/g, '<br/>') || '' }} />
+              <div className="rte-content text-sm" dangerouslySetInnerHTML={{ __html: renderEmailHtml(previewTemplate?.body) }} />
             </div>
             {previewTemplate?.signature && (
               <div className="border-t pt-3">
                 <p className="text-sm font-medium mb-1">Assinatura:</p>
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: previewTemplate.signature.replace(/\n/g, '<br/>') }} />
+                <div className="rte-content text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: renderEmailHtml(previewTemplate.signature) }} />
               </div>
             )}
           </div>

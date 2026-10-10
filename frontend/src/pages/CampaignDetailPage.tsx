@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { renderEmailHtml } from '@/lib/emailHtml';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/services/api';
 import { EmailCampaign, EmailLog } from '@/types';
@@ -84,11 +85,11 @@ export default function CampaignDetailPage() {
         <CardContent className="space-y-2">
           <p><span className="text-muted-foreground">Assunto:</span> {campaign.subject}</p>
           <p><span className="text-muted-foreground">Corpo:</span></p>
-          <div className="bg-muted p-3 rounded text-sm whitespace-pre-wrap">{campaign.body}</div>
+          <div className="bg-muted p-3 rounded text-sm rte-content" dangerouslySetInnerHTML={{ __html: renderEmailHtml(campaign.body) }} />
           {campaign.signature && (
             <div className="border-t pt-2">
               <p className="text-sm text-muted-foreground">Assinatura:</p>
-              <div className="text-sm whitespace-pre-wrap">{campaign.signature}</div>
+              <div className="text-sm rte-content" dangerouslySetInnerHTML={{ __html: renderEmailHtml(campaign.signature) }} />
             </div>
           )}
           {campaign.attachments && campaign.attachments.length > 0 && (

@@ -74,7 +74,7 @@ export default function DashboardPage() {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie data={stats?.byCity || []} cx="50%" cy="50%" outerRadius={100} paddingAngle={2} dataKey="count" nameKey="city" label={({ city, count }) => `${city}: ${count}`}>
-                  {(stats?.byCity || []).map((entry, index) => (
+                  {(stats?.byCity || []).map((_entry, index) => (
                     <Cell key={`city-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

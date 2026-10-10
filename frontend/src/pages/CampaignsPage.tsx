@@ -4,7 +4,9 @@ import api from '@/services/api';
 import { EmailCampaign, EmailTemplate, Group } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { EMAIL_VARIABLES } from '@/lib/emailVariables';
+import { renderEmailHtml } from '@/lib/emailHtml';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +23,7 @@ export default function CampaignsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [formData, setFormData] = useState({ name: '', subject: '', body: '', signature: '', templateId: '', groupId: '', smtpConfigId: '' });
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const uploading = false;
   const [previewCampaign, setPreviewCampaign] = useState<EmailCampaign | null>(null);
 
   useEffect(() => {
@@ -149,7 +151,7 @@ export default function CampaignsPage() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nova Campanha</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><label className="text-sm font-medium">Nome da Campanha</label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
@@ -172,10 +174,10 @@ export default function CampaignsPage() {
               </Select>
             </div>
             <div><label className="text-sm font-medium">Assunto</label><Input value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} /></div>
-            <div><label className="text-sm font-medium">Corpo do E-mail</label><Textarea value={formData.body} onChange={(e) => setFormData({ ...formData, body: e.target.value })} rows={5} /></div>
+            <div><label className="text-sm font-medium">Corpo do E-mail</label><RichTextEditor value={formData.body} onChange={(html) => setFormData((prev) => ({ ...prev, body: html }))} placeholder="Digite o conteúdo do e-mail..." minHeight={200} variables={EMAIL_VARIABLES} /></div>
             <div>
               <label className="text-sm font-medium flex items-center gap-2"><PenLine className="h-4 w-4" />Assinatura</label>
-              <Textarea value={formData.signature} onChange={(e) => setFormData({ ...formData, signature: e.target.value })} placeholder="Assinatura que será adicionada ao final do e-mail..." rows={3} />
+              <RichTextEditor value={formData.signature} onChange={(html) => setFormData((prev) => ({ ...prev, signature: html }))} placeholder="Assinatura que será adicionada ao final do e-mail..." minHeight={90} />
             </div>
             <div className="border rounded-lg p-3 space-y-2">
               <label className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Anexos</label>
@@ -207,9 +209,9 @@ export default function CampaignsPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">{getStatusBadge(previewCampaign?.status || '')}</div>
             <p className="text-sm text-muted-foreground">{previewCampaign?.subject}</p>
-            <div className="bg-muted p-3 rounded text-sm whitespace-pre-wrap">{previewCampaign?.body}</div>
+            <div className="bg-muted p-3 rounded text-sm rte-content" dangerouslySetInnerHTML={{ __html: renderEmailHtml(previewCampaign?.body) }} />
             {previewCampaign?.signature && (
-              <div className="border-t pt-2 text-sm text-muted-foreground whitespace-pre-wrap">{previewCampaign.signature}</div>
+              <div className="border-t pt-2 text-sm text-muted-foreground rte-content" dangerouslySetInnerHTML={{ __html: renderEmailHtml(previewCampaign.signature) }} />
             )}
             {previewCampaign?.attachments && previewCampaign.attachments.length > 0 && (
               <div className="space-y-1">

@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Save, Trash2, Send } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { EMAIL_VARIABLES } from '@/lib/emailVariables';
+import { ArrowLeft, Building2, Mail, MapPin, DollarSign, Save, Trash2, Send } from 'lucide-react';
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +18,9 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<Company>>({});
+  const [showEmail, setShowEmail] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [emailData, setEmailData] = useState({ subject: '', body: '' });
 
   useEffect(() => { if (id) loadCompany(); }, [id]);
 
@@ -34,16 +40,21 @@ export default function CompanyDetailPage() {
     catch (e) { console.error(e); }
   };
 
-  const handleSendEmail = async () => {
+  const openEmailDialog = () => {
     if (!company?.email) { alert('Empresa sem e-mail'); return; }
-    const subject = prompt('Assunto do e-mail:');
-    if (!subject) return;
-    const body = prompt('Corpo do e-mail:');
-    if (!body) return;
+    setEmailData({ subject: '', body: '' });
+    setShowEmail(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailData.subject.trim() || !emailData.body.trim()) { alert('Preencha o assunto e o corpo do e-mail'); return; }
+    setSending(true);
     try {
-      await api.post('/campaigns/send-single', { companyId: id, subject, body });
+      await api.post('/campaigns/send-single', { companyId: id, subject: emailData.subject, body: emailData.body });
+      setShowEmail(false);
       alert('E-mail enviado!');
     } catch (e: any) { alert(e.response?.data?.message || 'Erro ao enviar'); }
+    finally { setSending(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64">Carregando...</div>;
@@ -57,7 +68,7 @@ export default function CompanyDetailPage() {
           <h1 className="text-3xl font-bold">{company.name}</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSendEmail}><Send className="h-4 w-4 mr-2" />Enviar E-mail</Button>
+          <Button variant="outline" onClick={openEmailDialog}><Send className="h-4 w-4 mr-2" />Enviar E-mail</Button>
           <Button variant="outline" onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : 'Editar'}</Button>
           {editing && <Button onClick={handleUpdate}><Save className="h-4 w-4 mr-2" />Salvar</Button>}
           <Button variant="destructive" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>
@@ -146,6 +157,20 @@ export default function CompanyDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showEmail} onOpenChange={setShowEmail}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Enviar e-mail para {company.name}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><label className="text-sm font-medium">Assunto</label><Input value={emailData.subject} onChange={(e) => setEmailData({ ...emailData, subject: e.target.value })} /></div>
+            <div>
+              <label className="text-sm font-medium">Mensagem</label>
+              <RichTextEditor value={emailData.body} onChange={(html) => setEmailData((prev) => ({ ...prev, body: html }))} placeholder="Digite o conteúdo do e-mail..." minHeight={200} variables={EMAIL_VARIABLES} />
+            </div>
+            <Button onClick={handleSendEmail} disabled={sending} className="w-full"><Send className="h-4 w-4 mr-2" />{sending ? 'Enviando...' : 'Enviar'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

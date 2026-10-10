@@ -18,3 +18,16 @@
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
 }
+
+/* Editor de e-mail (rich text) e visualização do conteúdo formatado */
+.rte-content { line-height: 1.5; word-break: break-word; }
+.rte-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.25rem 0; }
+.rte-content ol { list-style: decimal; padding-left: 1.5rem; margin: 0.25rem 0; }
+.rte-content a { color: #2563eb; text-decoration: underline; }
+.rte-content blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75rem; color: #6b7280; margin: 0.25rem 0; }
+.rte-content h1 { font-size: 1.5rem; font-weight: 700; }
+.rte-content h2 { font-size: 1.25rem; font-weight: 700; }
+.rte-content h3 { font-size: 1.1rem; font-weight: 700; }
+.rte-content p { margin: 0.25rem 0; }
+.rte-content img { max-width: 100%; height: auto; }
+.rte-editor:empty:before { content: attr(data-placeholder); color: hsl(var(--muted-foreground)); pointer-events: none; }
